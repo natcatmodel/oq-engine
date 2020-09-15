@@ -259,9 +259,9 @@ class PmapGetter(object):
         return pmap
 
 
-class GmfDataGetter(collections.abc.Mapping):
+class GmfDataGetter(object):
     """
-    A dictionary-like object {sid: dictionary by realization index}
+    An object with a get_hazard() method
     """
     def __init__(self, dstore, sids, rlzs, num_rlzs):
         self.dstore = dstore
@@ -274,39 +274,29 @@ class GmfDataGetter(collections.abc.Mapping):
         if hasattr(self, 'data'):  # already initialized
             return
         self.dstore.open('r')  # if not already open
-        self.data = self[self.sids[0]]
-        if not self.data:  # no GMVs, return 0, counted in no_damage
-            self.data = {rlzi: 0 for rlzi in range(self.num_rlzs)}
-        # now some attributes set for API compatibility with the GmfGetter
-        # number of ground motion fields
-        # dictionary rlzi -> array(imts, events, nbytes)
-        self.E = len(self.rlzs)
-        del self.rlzs
 
-    def get_hazard(self, gsim=None):
-        """
-        :param gsim: ignored
-        :returns: an dict rlzi -> datadict
-        """
-        return self.data
-
-    def __getitem__(self, sid):
         dset = self.dstore['gmf_data/data']
-        idxs = self.dstore['gmf_data/indices'][sid]
+        idxs = self.dstore['gmf_data/indices'][self.sids[0]]
         if idxs.dtype.name == 'uint32':  # scenario
             idxs = [idxs]
         elif not idxs.dtype.names:  # engine >= 3.2
             idxs = zip(*idxs)
-        data = [dset[start:stop] for start, stop in idxs]
-        if len(data) == 0:  # site ID with no data
-            return {}
-        return group_by_rlz(numpy.concatenate(data), self.rlzs)
+        self.data = [dset[start:stop] for start, stop in idxs]
+        if self.data:
+            self.data = numpy.concatenate(self.data)
+        # now some attributes set for API compatibility with the GmfGetter
+        # number of ground motion fields
+        # dictionary rlzi -> array(imts, events, nbytes)
+        self.E = len(self.rlzs)
 
-    def __iter__(self):
-        return iter(self.sids)
-
-    def __len__(self):
-        return len(self.sids)
+    def get_hazard(self, gsim=None):
+        """
+        :param gsim: ignored
+        :returns: a dict rlzi -> datadict
+        """
+        if len(self.data) == 0:  # no GMVs, return 0, counted in no_damage
+            return {rlzi: 0 for rlzi in range(self.num_rlzs)}
+        return group_by_rlz(self.data, self.rlzs)
 
 
 time_dt = numpy.dtype(

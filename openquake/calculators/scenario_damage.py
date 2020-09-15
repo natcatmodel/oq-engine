@@ -86,10 +86,12 @@ def scenario_damage(riskinputs, crmodel, param, monitor):
         # of addition would hurt too much with multiple tasks
     seed = param['master_seed']
     num_events = param['num_events']  # per realization
+    haz_mon = monitor('getting hazard')
     for ri in riskinputs:
         # here instead F32 floats are ok
         ddic = AccumDict(accum=numpy.zeros((L, D - 1), F32))  # aid,eid->dd
-        ri.hazard_getter.init()
+        with haz_mon:
+            ri.hazard_getter.init()
         for out in ri.gen_outputs(crmodel, monitor):
             r = out.rlzi
             ne = num_events[r]  # total number of events
