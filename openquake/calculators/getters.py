@@ -274,24 +274,24 @@ class GmfDataGetter(object):
         if hasattr(self, 'data'):  # already initialized
             return
         self.dstore.open('r')  # if not already open
-        gmfdata = self.dstore['gmf_data/data'][self.idxs]
-        if len(gmfdata):
-            self.data = group_by_rlz(gmfdata, self.rlzs)
-        else:  # no GMVs, return 0, counted in no_damage
-            self.data = {rlzi: 0 for rlzi in range(self.num_rlzs)}
+        self.gmfdata = self.dstore['gmf_data/data'][self.idxs]
         # now some attributes set for API compatibility with the GmfGetter
         # number of ground motion fields
         # dictionary rlzi -> array(imts, events, nbytes)
         self.E = len(self.rlzs)
         # avoid data transfer
-        del self.idxs, self.rlzs, self.num_rlzs
+        del self.idxs
 
     def get_hazard(self, gsim=None):
         """
         :param gsim: ignored
         :returns: an dict rlzi -> datadict
         """
-        return self.data
+        if len(self.gmfdata):
+            data = group_by_rlz(self.gmfdata, self.rlzs)
+        else:  # no GMVs, return 0, counted in no_damage
+            data = {rlzi: 0 for rlzi in range(self.num_rlzs)}
+        return data
 
 
 time_dt = numpy.dtype(
