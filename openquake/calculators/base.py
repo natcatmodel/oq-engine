@@ -27,6 +27,7 @@ import traceback
 from datetime import datetime
 from shapely import wkt
 import numpy
+import pandas
 
 from openquake.baselib import (
     general, hdf5, datastore, __version__ as engine_version)
@@ -992,15 +993,19 @@ class RiskCalculator(HazardCalculator):
         if 'gmf_data' not in dstore:
             raise InvalidFile('Did you forget gmfs_csv in %s?'
                               % self.oqparam.inputs['job_ini'])
+        if len(dstore['gmf_data/data']) == 0:
+            raise RuntimeError(
+                'There are no GMFs available: perhaps you did set '
+                'ground_motion_fields=False or a large minimum_intensity')
         assets_by_site = self.assetcol.assets_by_site()
-        for sid, assets in enumerate(assets_by_site):
+        rlzs = dstore['events']['rlz_id']
+        sids = dstore['gmf_data/data']['sid']
+        df = pandas.DataFrame({'idx': numpy.arange(len(sids))}, index=sids)
+        for sid, idx in df.groupby(df.index):
+            assets = assets_by_site[sid]
             if len(assets) == 0:
                 continue
-            getter = getters.GmfDataGetter(dstore, [sid], self.R)
-            if len(dstore['gmf_data/data']) == 0:
-                raise RuntimeError(
-                    'There are no GMFs available: perhaps you did set '
-                    'ground_motion_fields=False or a large minimum_intensity')
+            getter = getters.GmfDataGetter(dstore, sid, idx, rlzs, self.R)
             for block in general.block_splitter(
                     assets, self.oqparam.assets_per_site_limit):
                 yield riskinput.RiskInput(sid, getter, numpy.array(block))
