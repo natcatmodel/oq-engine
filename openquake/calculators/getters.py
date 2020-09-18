@@ -508,19 +508,19 @@ def gen_rupture_getters(dstore, srcfilter, ct):
             # in event_based_risk/case_3
             continue
         trt = trt_by_grp[grp_id]
-        proxies = list(_gen(rups, srcfilter, trt, samples[grp_id]))
-        if len(proxies) == 1:  # split by gsim
+        proxies = _gen(rups, srcfilter, trt, samples[grp_id])
+        if len(rups) == 1:  # split by gsim
             offset = 0
             for gsim, rlzs in rlzs_by_gsim[grp_id].items():
                 rgetter = RuptureGetter(
-                    proxies, dstore.filename, grp_id,
+                    list(proxies), dstore.filename, grp_id,
                     trt, samples[grp_id], {gsim: rlzs})
                 rgetter.offset = offset
                 offset += rgetter.num_events
                 yield rgetter
         else:  # split by block
             if not maxweight:
-                maxweight = sum(p.weight for p in proxies) / (ct // 2 or 1)
+                maxweight = len(rups) / (ct // 2 or 1)
             nblocks = 0
             for block in general.block_splitter(
                     proxies, maxweight, operator.attrgetter('weight')):
