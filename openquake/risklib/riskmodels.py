@@ -637,6 +637,9 @@ class CompositeRiskModel(collections.abc.Mapping):
             for lt, rf in rm.risk_functions.items():
                 if hasattr(rf, 'imt'):
                     iml[rf.imt].append(rf.imls[0])
+        for k, dic in self.consdict.items():
+            if dic:
+                self._riskmodels[k] = dic
         self.min_iml = {imt: min(iml[imt]) for imt in iml}
 
     def eid_dmg_dt(self):
@@ -779,11 +782,7 @@ class CompositeRiskModel(collections.abc.Mapping):
         if hasattr(rf, 'loss_ratios'):
             for lt in self.loss_types:
                 attrs['loss_ratios_' + lt] = rf.loss_ratios[lt]
-        dic = self._riskmodels.copy()
-        for k, v in self.consdict.items():
-            if len(v):
-                dic[k] = v
-        return dic, attrs
+        return self._riskmodels, attrs
 
     def __repr__(self):
         lines = ['%s: %s' % item for item in sorted(self.items())]
