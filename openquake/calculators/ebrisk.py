@@ -24,7 +24,6 @@ import numpy
 from openquake.baselib import datastore, hdf5, parallel, general
 from openquake.baselib.python3compat import zip
 from openquake.hazardlib.calc.filters import getdefault
-from openquake.risklib import riskmodels
 from openquake.risklib.scientific import LossesByAsset
 from openquake.risklib.riskinput import (
     cache_epsilons, get_assets_by_taxo, get_output)
@@ -63,7 +62,7 @@ def calc_risk(gmfs, param, monitor):
         weights = dstore['weights'][()]
     E = len(eids)
     L = len(param['lba'].loss_names)
-    elt_dt = [('event_id', U32), ('rlzi', U16), ('loss', (F32, (L,)))]
+    elt_dt = [('event_id', U32), ('rlzi', U16), ('loss', (F64, (L,)))]
     # aggkey -> eid -> loss
     acc = dict(events_per_sid=0, numlosses=numpy.zeros(2, int))  # (kept, tot)
     lba = param['lba']
@@ -200,7 +199,7 @@ class EbriskCalculator(event_based.EventBasedCalculator):
                             'minimum_asset_loss')
         self.param['minimum_asset_loss'] = mal
 
-        elt_dt = [('event_id', U32), ('rlzi', U16), ('loss', (F32, (L,)))]
+        elt_dt = [('event_id', U32), ('rlzi', U16), ('loss', (F64, (L,)))]
         for idxs, attrs in gen_indices(self.assetcol.tagcol, oq.aggregate_by):
             idx = ','.join(map(str, idxs)) + ','
             self.datastore.create_dset('event_loss_table/' + idx, elt_dt,
