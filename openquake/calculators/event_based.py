@@ -22,7 +22,7 @@ import operator
 import numpy
 
 from openquake.baselib import hdf5, parallel
-from openquake.baselib.general import AccumDict
+from openquake.baselib.general import AccumDict, gen_slices
 from openquake.hazardlib.probability_map import ProbabilityMap
 from openquake.hazardlib.stats import compute_pmap_stats
 from openquake.hazardlib.calc.stochastic import sample_ruptures
@@ -30,13 +30,13 @@ from openquake.hazardlib.gsim.base import ContextMaker
 from openquake.hazardlib.calc.filters import nofilter
 from openquake.hazardlib import InvalidFile
 from openquake.hazardlib.calc.stochastic import get_rup_array, rupture_dt
-from openquake.hazardlib.source.rupture import EBRupture
+from openquake.hazardlib.source.rupture import EBRupture, RuptureProxy
 from openquake.hazardlib.geo.mesh import surface_to_array
 from openquake.commonlib import calc, util, logs, readinput, logictree
 from openquake.risklib.riskinput import str2rsi
 from openquake.calculators import base
 from openquake.calculators.getters import (
-    GmfGetter, gen_rupture_getters, sig_eps_dt, time_dt)
+    RuptureGetter, GmfGetter, gen_rupture_getters, sig_eps_dt, time_dt)
 from openquake.calculators.classical import ClassicalCalculator
 from openquake.engine import engine
 
@@ -65,15 +65,32 @@ def get_mean_curves(dstore, imt):
 # ########################################################################## #
 
 
-def compute_gmfs(rupgetter, param, monitor):
+def compute_gmfs(dstore, slc, amplifier, monitor):
     """
     Compute GMFs and optionally hazard curves
     """
-    oq = param['oqparam']
+    dstore.open('r')
+    oq = dstore['oqparam']
+    full_lt = dstore['full_lt']
+    rlzs_by_gsim = full_lt.get_rlzs_by_gsim_grp()
+    rlz_by_event = (dstore['events']['rlz_id'] if oq.hazard_curves_from_gmfs
+                    else None)
     srcfilter = monitor.read_pik('srcfilter')
-    getter = GmfGetter(rupgetter, srcfilter, oq, param['amplifier'],
-                       param['sec_perils'])
-    return getter.compute_gmfs_curves(param.get('rlz_by_event'), monitor)
+    rups = dstore['ruptures'][slc]
+    proxies = []
+    for rup in rups:
+        grp_id = rup['grp_id']
+        trt = full_lt.trt_by_grp[grp_id]
+        sids = srcfilter.close_sids(rup, trt)
+        if len(sids):
+            proxies.append(RuptureProxy(rup, len(sids)))
+    weight = sum(p.weight for p in proxies)
+    print(f'--- {monitor.task_no=} {weight=}')
+    rupgetter = RuptureGetter(proxies, dstore.filename, grp_id,
+                              trt, rlzs_by_gsim[grp_id])
+    getter = GmfGetter(rupgetter, srcfilter, oq, amplifier,
+                       oq.get_sec_perils())
+    return getter.compute_gmfs_curves(rlz_by_event, monitor)
 
 
 @base.calculators.add('event_based', 'scenario', 'ucerf_hazard')
@@ -302,17 +319,14 @@ class EventBasedCalculator(base.HazardCalculator):
             self.datastore.create_dset('gmf_data/events_by_sid', U32, (N,))
             self.datastore.create_dset('gmf_data/time_by_rup',
                                        time_dt, (nrups,), fillvalue=None)
-        if oq.hazard_curves_from_gmfs:
-            self.param['rlz_by_event'] = self.datastore['events']['rlz_id']
 
         # compute_gmfs in parallel
+        ct = oq.concurrent_tasks or 1
         nr = len(self.datastore['ruptures'])
         self.datastore.swmr_on()
         logging.info('Reading {:_d} ruptures'.format(nr))
-        iterargs = ((rgetter, self.param)
-                    for rgetter in gen_rupture_getters(
-                            self.datastore, self.srcfilter,
-                            oq.concurrent_tasks))
+        iterargs = ((self.datastore, slc, self.param['amplifier'])
+                    for slc in gen_slices(0, nr, max(nr // ct, 1)))
         smap = parallel.Starmap(
             self.core_task.__func__, iterargs, h5=self.datastore.hdf5,
             num_cores=oq.num_cores)
