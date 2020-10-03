@@ -382,7 +382,7 @@ class GmfGetter(object):
                 self.min_iml, self.rlzs_by_gsim, self.sig_eps)
             self.times.append((computer.ebrupture.id, len(computer.sids), dt))
             alldata += data
-        return pandas.DataFrame(alldata)
+        return pandas.DataFrame(alldata, index=alldata['sid'])
 
     def compute_gmfs_curves(self, rlzs, monitor):
         """

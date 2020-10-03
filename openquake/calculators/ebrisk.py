@@ -20,11 +20,11 @@ import operator
 import itertools
 from datetime import datetime
 import numpy
+import pandas
 
 from openquake.baselib import datastore, hdf5, parallel, general
 from openquake.baselib.python3compat import zip
 from openquake.hazardlib.calc.filters import getdefault
-from openquake.risklib import riskmodels
 from openquake.risklib.scientific import LossesByAsset
 from openquake.risklib.riskinput import (
     cache_epsilons, get_assets_by_taxo, get_output)
@@ -46,7 +46,7 @@ gmf_info_dt = numpy.dtype([('rup_id', U32), ('task_no', U16),
 
 def calc_risk(gmfs, param, monitor):
     """
-    :param gmfs: an array of GMFs with fields sid, eid, gmv
+    :param gmfs: a DataFrame of GMFs with fields sid, eid, rlz, gmv
     :param param: a dictionary of parameters coming from the job.ini
     :param monitor: a Monitor instance
     :returns: a dictionary of arrays with keys elt, alt, losses_by_A, ...
@@ -71,7 +71,6 @@ def calc_risk(gmfs, param, monitor):
         accum=general.AccumDict(accum=numpy.zeros(L, F32)))
     lba.losses_by_E = numpy.zeros((E, L), F32)
     tempname = param['tempname']
-    eid2rlz = dict(events[['id', 'rlz_id']])
     eid2idx = {eid: idx for idx, eid in enumerate(eids)}
     aggby = param['aggregate_by']
 
@@ -82,21 +81,20 @@ def calc_risk(gmfs, param, monitor):
         if lt in lba.policy_dict:  # same order as in lba.compute
             minimum_loss.append(val)
 
-    haz_by_sid = general.group_array(gmfs, 'sid')
     for sid, asset_df in assets_df.groupby('site_id'):
         try:
-            haz = haz_by_sid[sid]
+            haz = gmfs.loc[sid]
         except KeyError:  # no hazard here
             continue
         with mon_risk:
             assets = asset_df.to_records()  # fast
             acc['events_per_sid'] += len(haz)
             if param['avg_losses']:
-                ws = weights[[eid2rlz[eid] for eid in haz['eid']]]
+                ws = weights[U32(haz['rlz'])]
             else:
                 ws = None
             assets_by_taxo = get_assets_by_taxo(assets, tempname)  # fast
-            eidx = numpy.array([eid2idx[eid] for eid in haz['eid']])  # fast
+            eidx = numpy.array([eid2idx[eid] for eid in haz.eid])  # fast
             out = get_output(crmodel, assets_by_taxo, haz)  # slow
         with mon_agg:
             tagidxs = assets[aggby] if aggby else None
@@ -109,7 +107,7 @@ def calc_risk(gmfs, param, monitor):
          for event, losses in zip(events, lba.losses_by_E) if losses.sum()),
         elt_dt)
     acc['alt'] = {idx: numpy.fromiter(  # already sorted by aid, ultra-fast
-        ((eid, eid2rlz[eid], loss) for eid, loss in lba.alt[idx].items()),
+        ((eid, 0, loss) for eid, loss in lba.alt[idx].items()),
         elt_dt) for idx in lba.alt}
     if param['avg_losses']:
         acc['losses_by_A'] = param['lba'].losses_by_A * param['ses_ratio']
@@ -127,7 +125,7 @@ def ebrisk(rupgetter, param, monitor):
     """
     mon_rup = monitor('getting ruptures', measuremem=False)
     mon_haz = monitor('getting hazard', measuremem=False)
-    gmfs = []
+    gmfs = {}
     gmf_info = []
     srcfilter = monitor.read_pik('srcfilter')
     gg = getters.GmfGetter(rupgetter, srcfilter, param['oqparam'],
@@ -137,10 +135,11 @@ def ebrisk(rupgetter, param, monitor):
         with mon_haz:
             data, time_by_rup = c.compute_all(gg.min_iml, gg.rlzs_by_gsim)
         if len(data):
-            gmfs.append(data)
-            nbytes += data.nbytes
+            gmfs += data
+            nb = len(data['eid']) * 8 * len(data)
+            nbytes += nb
         gmf_info.append((c.ebrupture.id, mon_haz.task_no, len(c.sids),
-                         data.nbytes, mon_haz.dt))
+                         nb, mon_haz.dt))
         if nbytes > param['ebrisk_maxsize']:
             msg = 'produced subtask'
             try:
@@ -148,12 +147,13 @@ def ebrisk(rupgetter, param, monitor):
                            'ebrisk#%d' % monitor.task_no, msg)
             except Exception:  # for `oq run`
                 print(msg)
-            yield calc_risk, numpy.concatenate(gmfs), param
+            yield calc_risk, pandas.DataFrame(gmfs, index=gmfs['sid']), param
             nbytes = 0
             gmfs = []
     res = {}
     if gmfs:
-        res.update(calc_risk(numpy.concatenate(gmfs), param, monitor))
+        res.update(calc_risk(pandas.DataFrame(gmfs, gmfs['sid']),
+                             param, monitor))
     if gmf_info:
         res['gmf_info'] = numpy.array(gmf_info, gmf_info_dt)
     yield res

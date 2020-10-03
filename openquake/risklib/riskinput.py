@@ -72,8 +72,7 @@ def get_output(crmodel, assets_by_taxo, haz, rlzi=None):
         # seed is set correctly; very tricky indeed! (MS)
         haz.sort_values('eid', inplace=True)
         eids = haz.eid.to_numpy()
-        lst = [haz[col].to_numpy() for col in haz.columns
-               if col.startswith('gmv_')]
+        lst = [haz[col].to_numpy() for col in haz.columns if col[0] == 'gmv']
         data = numpy.array(lst).T  # shape (E, M)
     elif isinstance(haz, numpy.ndarray):
         # ebrisk
