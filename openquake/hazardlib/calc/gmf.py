@@ -24,6 +24,7 @@ import time
 import numpy
 import scipy.stats
 
+from openquake.baselib.general import AccumDict
 from openquake.hazardlib.const import StdDev
 from openquake.hazardlib.gsim.base import ContextMaker
 from openquake.hazardlib.gsim.multi import MultiGMPE
@@ -138,8 +139,7 @@ class GmfComputer(object):
         sids = self.sids
         eids_by_rlz = self.ebrupture.get_eids_by_rlz(rlzs_by_gsim)
         mag = self.ebrupture.rupture.mag
-        data = []
-        No = sum(len(sp.outputs) for sp in self.sec_perils)
+        data = AccumDict(accum=[])
         for gs, rlzs in rlzs_by_gsim.items():
             num_events = sum(len(eids_by_rlz[rlz]) for rlz in rlzs)
             # NB: the trick for performance is to keep the call to
@@ -153,7 +153,6 @@ class GmfComputer(object):
             n = 0
             for rlz in rlzs:
                 eids = eids_by_rlz[rlz] + self.e0
-                e = len(eids)
                 for ei, eid in enumerate(eids):
                     gmfa = array[:, :, n + ei]  # shape (N, M)
                     tot = gmfa.sum(axis=0)  # shape (M,)
@@ -163,29 +162,25 @@ class GmfComputer(object):
                         tup = tuple([eid, rlz] + list(sig[:, n + ei]) +
                                     list(eps[:, n + ei]))
                         sig_eps.append(tup)
-                    sp_out = numpy.zeros((No,) + gmfa.shape)  # No, N, M
+                    sp_dic = {}  # (sp_out, m) -> out
                     for m, imt in enumerate(self.imts):
-                        o = 0
                         for sp in self.sec_perils:
-                            o1 = o + len(sp.outputs)
-                            sp_out[o:o1, :, m] = sp.compute(
-                                mag, imt, gmfa[:, m], self.sctx)
-                            o = o1
+                            outs = sp.compute(mag, imt, gmfa[:, m], self.sctx)
+                            for sp_out, out in zip(sp.outputs, outs):
+                                sp_dic[sp_out, m] = out
                     for i, gmv in enumerate(gmfa):
                         if gmv.sum():
-                            if No:
-                                data.append((sids[i], eid, gmv) +
-                                            tuple(sp_out[:, i, :]))
-                            else:
-                                data.append((sids[i], eid, gmv))
+                            data['eid'].append(eid)
+                            data['sid'].append(sids[i])
+                            data['rlz'].append(rlz)
+                            for m, gmvs in enumerate(gmv.T):
+                                data['gmv', m].append(gmvs)
+                            for key, out in sp_dic.items():
+                                data[key].append(out[i])
                         # gmv can be zero due to the minimum_intensity, coming
                         # from the job.ini or from the vulnerability functions
-                n += e
-        dt = F32, (len(min_iml),)
-        dtlist = [('sid', U32), ('eid', U32), ('gmv', dt)] + [
-            (out, dt) for sp in self.sec_perils for out in sp.outputs]
-        d = numpy.array(data, dtlist)
-        return d, time.time() - t0
+                n += len(eids)
+        return data, time.time() - t0
 
     def compute(self, gsim, num_events):
         """

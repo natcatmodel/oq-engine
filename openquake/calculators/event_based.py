@@ -174,22 +174,24 @@ class EventBasedCalculator(base.HazardCalculator):
         sav_mon = self.monitor('saving gmfs')
         agg_mon = self.monitor('aggregating hcurves')
         M = len(self.oqparam.imtls)
+        sec_outs = self.oqparam.get_sec_outputs()
         with sav_mon:
             data = result.pop('gmfdata')
             if len(data):
                 times = result.pop('times')
                 rupids = list(times['rup_id'])
                 self.datastore['gmf_data/time_by_rup'][rupids] = times
-                hdf5.extend(self.datastore['gmf_data/sid'], data['sid'])
-                hdf5.extend(self.datastore['gmf_data/eid'], data['eid'])
+                hdf5.extend(self.datastore['gmf_data/sid'],
+                            data.sid.to_numpy())
+                hdf5.extend(self.datastore['gmf_data/eid'],
+                            data.eid.to_numpy())
                 for m in range(M):
                     hdf5.extend(self.datastore[f'gmf_data/gmv_{m}'],
-                                data['gmv'][:, m])
-                secperils = data.dtype.names[3:]  # after sid, eid, gmv
+                                data['gmv', m].to_numpy())
                 for m in range(M):
-                    for peril in secperils:
-                        hdf5.extend(self.datastore[f'gmf_data/{peril}_{m}'],
-                                    data[peril][:, m])
+                    for sp_out in sec_outs:
+                        hdf5.extend(self.datastore[f'gmf_data/{sp_out}_{m}'],
+                                    data[sp_out, m].to_numpy())
                 sig_eps = result.pop('sig_eps')
                 hdf5.extend(self.datastore['gmf_data/sigma_epsilon'], sig_eps)
                 self.offset += len(data)

@@ -17,9 +17,9 @@
 # along with OpenQuake.  If not, see <http://www.gnu.org/licenses/>.
 
 import operator
-import logging
 import unittest.mock as mock
 import numpy
+import pandas
 from openquake.baselib import hdf5, datastore, general
 from openquake.hazardlib.gsim.base import ContextMaker, FarAwayRupture
 from openquake.hazardlib import calc, probability_map, stats
@@ -372,30 +372,17 @@ class GmfGetter(object):
 
     def get_gmfdata(self, mon):
         """
-        :returns: an array of the dtype (sid, eid, gmv)
+        :returns: a DataFrame
         """
-        alldata = []
+        alldata = {}
         self.sig_eps = []
         self.times = []  # rup_id, nsites, dt
         for computer in self.gen_computers(mon):
             data, dt = computer.compute_all(
                 self.min_iml, self.rlzs_by_gsim, self.sig_eps)
             self.times.append((computer.ebrupture.id, len(computer.sids), dt))
-            alldata.append(data)
-        if not alldata:
-            return []
-        return numpy.concatenate(alldata)
-
-    def get_hazard_by_sid(self, data=None):
-        """
-        :param data: if given, an iterator of records of dtype gmf_dt
-        :returns: sid -> records
-        """
-        if data is None:
-            data = self.get_gmfdata()
-        if len(data) == 0:
-            return {}
-        return general.group_array(data, 'sid')
+            alldata += data
+        return pandas.DataFrame(alldata)
 
     def compute_gmfs_curves(self, rlzs, monitor):
         """
@@ -408,14 +395,13 @@ class GmfGetter(object):
         if oq.hazard_curves_from_gmfs:
             hc_mon = monitor('building hazard curves', measuremem=False)
             gmfdata = self.get_gmfdata(mon)  # returned later
-            hazard = self.get_hazard_by_sid(data=gmfdata)
-            for sid, hazardr in hazard.items():
-                dic = group_by_rlz(hazardr, rlzs)
-                for rlzi, array in dic.items():
+            for sid, haz in gmfdata.groupby('sid'):
+                for rlzi, df in haz.groupby('rlz'):
+                    gmfs = [df['gmv', m].to_numpy()
+                            for m in range(len(oq.imtls))]
                     with hc_mon:
                         poes = gmvs_to_poes(
-                            array['gmv'].T, oq.imtls,
-                            oq.ses_per_logic_tree_path)
+                            gmfs, oq.imtls, oq.ses_per_logic_tree_path)
                         for m, imt in enumerate(oq.imtls):
                             hcurves[rsi2str(rlzi, sid, imt)] = poes[m]
         if not oq.ground_motion_fields:
