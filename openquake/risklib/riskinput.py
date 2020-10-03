@@ -70,7 +70,7 @@ def get_output(crmodel, assets_by_taxo, haz, rlzi=None):
         # sample method would receive the means in random
         # order and produce random results even if the
         # seed is set correctly; very tricky indeed! (MS)
-        haz.sort_values('eid', inplace=True)
+        haz = haz.sort_values('eid')
         eids = haz.eid.to_numpy()
         lst = [haz[col].to_numpy() for col in haz.columns
                if col[0] == 'gmv' or col.startswith('gmv_')]
