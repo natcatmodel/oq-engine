@@ -71,6 +71,7 @@ def calc_risk(gmfs, param, monitor):
         accum=general.AccumDict(accum=numpy.zeros(L, F32)))
     lba.losses_by_E = numpy.zeros((E, L), F32)
     tempname = param['tempname']
+    eid2rlz = dict(events[['id', 'rlz_id']])
     eid2idx = {eid: idx for idx, eid in enumerate(eids)}
     aggby = param['aggregate_by']
 
@@ -82,9 +83,8 @@ def calc_risk(gmfs, param, monitor):
             minimum_loss.append(val)
 
     for sid, asset_df in assets_df.groupby('site_id'):
-        try:
-            haz = gmfs.loc[sid]
-        except KeyError:  # no hazard here
+        haz = gmfs[gmfs.index == sid]
+        if len(haz) == 0:  # no hazard here
             continue
         with mon_risk:
             assets = asset_df.to_records()  # fast
@@ -107,7 +107,7 @@ def calc_risk(gmfs, param, monitor):
          for event, losses in zip(events, lba.losses_by_E) if losses.sum()),
         elt_dt)
     acc['alt'] = {idx: numpy.fromiter(  # already sorted by aid, ultra-fast
-        ((eid, 0, loss) for eid, loss in lba.alt[idx].items()),
+        ((eid, eid2rlz[eid], loss) for eid, loss in lba.alt[idx].items()),
         elt_dt) for idx in lba.alt}
     if param['avg_losses']:
         acc['losses_by_A'] = param['lba'].losses_by_A * param['ses_ratio']

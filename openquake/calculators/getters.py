@@ -384,9 +384,8 @@ class GmfGetter(object):
             alldata += data
         return pandas.DataFrame(alldata, index=alldata['sid'])
 
-    def compute_gmfs_curves(self, rlzs, monitor):
+    def compute_gmfs_curves(self, monitor):
         """
-        :param rlzs: an array of shape E
         :returns: a dict with keys gmfdata, hcurves
         """
         oq = self.oqparam
@@ -416,19 +415,6 @@ class GmfGetter(object):
         res = dict(gmfdata=gmfdata, hcurves=hcurves, times=times,
                    sig_eps=numpy.array(self.sig_eps, self.sig_eps_dt))
         return res
-
-
-# TODO: use pandas here
-def group_by_rlz(data, rlzs):
-    """
-    :param data: a composite array of D elements with a field `eid`
-    :param rlzs: an array of E >= D elements
-    :returns: a dictionary rlzi -> data for each realization
-    """
-    acc = general.AccumDict(accum=[])
-    for rec in data:
-        acc[rlzs[rec['eid']]].append(rec)
-    return {rlzi: numpy.array(recs) for rlzi, recs in acc.items()}
 
 
 def gen_rgetters(dstore, slc=slice(None)):
