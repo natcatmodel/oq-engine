@@ -279,7 +279,7 @@ class GmfDataGetter(object):
         :param gsim: ignored
         :returns: an dict rlzi -> datadict
         """
-        return dict(list(self.df.groupby('rlzs')))
+        return dict(list(self.df.groupby('rlz')))
 
 
 class ZeroGetter(object):
@@ -374,7 +374,7 @@ class GmfGetter(object):
         """
         :returns: a DataFrame
         """
-        alldata = {}
+        alldata = {'sid': []}
         self.sig_eps = []
         self.times = []  # rup_id, nsites, dt
         for computer in self.gen_computers(mon):
