@@ -130,7 +130,7 @@ def ebrisk(rupgetter, param, monitor):
     srcfilter = monitor.read_pik('srcfilter')
     gg = getters.GmfGetter(rupgetter, srcfilter, param['oqparam'],
                            param['amplifier'])
-    nbytes = 0
+    nb, nbytes = 0, 0
     for c in gg.gen_computers(mon_rup):
         with mon_haz:
             data, time_by_rup = c.compute_all(gg.min_iml, gg.rlzs_by_gsim)
