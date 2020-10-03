@@ -117,6 +117,7 @@ def get_src_loss_table(dstore, L):
         (source_ids, array of losses of shape (Ns, L))
     """
     lbe = dstore['losses_by_event'][:]
+    assert len(lbe), 'losses_by_event is empty!'
     rup_ids = dstore['events']['rup_id'][lbe['event_id']]
     source_id = dstore['ruptures']['source_id'][rup_ids]
     w = dstore['weights'][:]
