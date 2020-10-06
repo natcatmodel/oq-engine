@@ -692,7 +692,7 @@ class HazardCalculator(BaseCalculator):
         if not self.crmodel:
             parent = self.datastore.parent
             if 'risk_model' in parent:
-                self.crmodel = riskmodels.CompositeRiskModel.read(parent)
+                self.crmodel = parent['risk_model']
             return
         if self.oqparam.ground_motion_fields and not self.oqparam.imtls:
             raise InvalidFile('No intensity_measure_types specified in %s' %
@@ -704,6 +704,8 @@ class HazardCalculator(BaseCalculator):
         Save the risk models in the datastore
         """
         if len(self.crmodel):
+            self.datastore['risk_model'] = self.crmodel
+            return
             logging.info('Storing risk model')
             self.datastore['risk_model'] = rm = self.crmodel
             attrs = self.datastore.getitem('risk_model').attrs

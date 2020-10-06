@@ -16,18 +16,16 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with OpenQuake. If not, see <http://www.gnu.org/licenses/>.
 import re
-import ast
 import copy
+import pickle
 import operator
 import functools
 import collections
-from urllib.parse import unquote_plus
 import numpy
 
 from openquake.baselib import hdf5
 from openquake.baselib.node import Node
-from openquake.baselib.general import (
-    AccumDict, cached_property, groupby, group_array)
+from openquake.baselib.general import AccumDict, cached_property, groupby
 from openquake.hazardlib import valid, nrml, InvalidFile
 from openquake.hazardlib.sourcewriter import obj_to_node
 from openquake.risklib import scientific
@@ -489,48 +487,6 @@ class CompositeRiskModel(collections.abc.Mapping):
     :param consdict:
         a dictionary riskid -> loss_type -> consequence functions
     """
-    @classmethod
-    # TODO: reading new-style consequences is missing
-    def read(cls, dstore):
-        """
-        :param dstore: a DataStore instance
-        :returns: a :class:`CompositeRiskModel` instance
-        """
-        oqparam = dstore['oqparam']
-        crm = dstore.getitem('risk_model')
-        risklist = RiskFuncList()
-        risklist.limit_states = crm.attrs['limit_states']
-        for quoted_id, rm in crm.items():
-            riskid = unquote_plus(quoted_id)
-            for lt_kind in rm:
-                lt, kind = lt_kind.rsplit('-', 1)
-                rf = dstore['risk_model/%s/%s' % (quoted_id, lt_kind)]
-                if kind == 'fragility':  # rf is a FragilityFunctionList
-                    try:
-                        rf = rf.build(
-                            risklist.limit_states,
-                            oqparam.continuous_fragility_discretization,
-                            oqparam.steps_per_interval)
-                    except ValueError as err:
-                        raise ValueError('%s: %s' % (riskid, err))
-                    rf.loss_type = lt
-                    rf.kind = kind
-                    risklist.append(rf)
-                else:  # rf is a vulnerability function
-                    rf.seed = oqparam.master_seed
-                    rf.init()
-                    if lt.endswith('_retrofitted'):
-                        # strip _retrofitted, since len('_retrofitted') = 12
-                        rf.loss_type = lt[:-12]
-                        rf.kind = 'vulnerability_retrofitted'
-                    else:
-                        rf.loss_type = lt
-                        rf.kind = 'vulnerability'
-                    risklist.append(rf)
-        crm = CompositeRiskModel(oqparam, risklist)
-        crm.tmap = ast.literal_eval(dstore.get_attr('risk_model', 'tmap'))
-        return crm
-
     def __init__(self, oqparam, risklist, consdict=()):
         self.oqparam = oqparam
         self.risklist = risklist  # by taxonomy
@@ -775,15 +731,13 @@ class CompositeRiskModel(collections.abc.Mapping):
         attrs = dict(covs=self.covs, loss_types=loss_types,
                      limit_states=limit_states,
                      tmap=repr(getattr(self, 'tmap', [])))
-        rf = next(iter(self.values()))
-        if hasattr(rf, 'loss_ratios'):
-            for lt in self.loss_types:
-                attrs['loss_ratios_' + lt] = rf.loss_ratios[lt]
-        dic = self._riskmodels.copy()
-        for k, v in self.consdict.items():
-            if len(v):
-                dic[k] = v
-        return dic, attrs
+        pik = pickle.dumps(self, pickle.HIGHEST_PROTOCOL)
+        return pik, attrs
+
+    def __fromh5__(self, pik, attrs):
+        pik = pickle.loads(pik)
+        vars(self).update(vars(pik))
+        vars(self).update(attrs)
 
     def __repr__(self):
         lines = ['%s: %s' % item for item in sorted(self.items())]
