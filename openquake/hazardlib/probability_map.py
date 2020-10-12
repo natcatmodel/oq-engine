@@ -323,30 +323,6 @@ class ProbabilityMap(dict):
     def __getstate__(self):
         return dict(shape_y=self.shape_y, shape_z=self.shape_z)
 
-    def __toh5__(self):
-        # converts to an array of shape (num_sids, shape_y, shape_z)
-        size = len(self)
-        sids = self.sids
-        shape = (size, self.shape_y, self.shape_z)
-        array = numpy.zeros(shape, F64)
-        for i, sid in numpy.ndenumerate(sids):
-            try:
-                array[i] = self[sid].array
-            except ValueError as exc:
-                # this should never happen, but I got a could not broadcast
-                # input array once for Australia
-                raise ValueError('%s on site_id=%d' % (exc, sid))
-        return dict(array=array, sids=sids), {}
-
-    def __fromh5__(self, dic, attrs):
-        # rebuild the map from sids and probs arrays
-        array = dic['array']
-        sids = dic['sids']
-        self.shape_y = array.shape[1]
-        self.shape_z = array.shape[2]
-        for sid, prob in zip(sids, array):
-            self[sid] = ProbabilityCurve(prob)
-
     def __repr__(self):
         return '<%s %d, %d, %d>' % (self.__class__.__name__, len(self),
                                     self.shape_y, self.shape_z)
