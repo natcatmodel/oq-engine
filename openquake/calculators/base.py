@@ -101,6 +101,23 @@ def get_stats(seq):
     return numpy.array(tup, stats_dt)
 
 
+def create_poes_datasets(dstore, N, full_lt):
+    oq = dstore['oqparam']
+    L = len(oq.imtls.array)
+    rlzs_by_grp = full_lt.get_rlzs_by_grp()
+    dstore['rlzs_by_grp'] = rlzs_by_grp
+    for grp_id, lst in rlzs_by_grp.items():
+        shape = (N, L, len(lst))
+        dstore.create_dset('poes/' + grp_id, float, shape, compression='gzip')
+    if oq.hazard_calculation_id is None:
+        with hdf5.File(dstore.tempname, 'a') as cache:
+            cache['rlzs_by_grp'] = rlzs_by_grp
+            for grp_id, dset in rlzs_by_grp.items():
+                shape = (N, L, len(dset))
+                hdf5.create(cache, 'poes/' + grp_id, float, shape,
+                            compression='gzip')
+
+
 class InvalidCalculationID(Exception):
     """
     Raised when running a post-calculation on top of an incompatible
@@ -507,6 +524,7 @@ class HazardCalculator(BaseCalculator):
         if not, read the inputs directly.
         """
         oq = self.oqparam
+        self.L = len(oq.imtls.array)
         if 'gmfs' in oq.inputs or 'multi_peril' in oq.inputs:
             # read hazard from files
             assert not oq.hazard_calculation_id, (
@@ -535,14 +553,17 @@ class HazardCalculator(BaseCalculator):
             haz_sitecol = readinput.get_site_collection(oq)
             self.load_crmodel()  # must be after get_site_collection
             self.read_exposure(haz_sitecol)  # define .assets_by_site
-            self.datastore['poes/grp-00'] = fix_ones(readinput.pmap)
+            pmap = fix_ones(readinput.pmap)
             self.datastore['sitecol'] = self.sitecol
             self.datastore['assetcol'] = self.assetcol
-            self.datastore['full_lt'] = fake = logictree.FullLogicTree.fake()
+            fake = logictree.FullLogicTree.fake()
+            self.datastore['full_lt'] = fake
+            self.datastore['rlzs_by_grp'] = fake.get_rlzs_by_grp()
+            create_poes_datasets(self.datastore, self.N, fake)
+            self.datastore['poes/grp-00'][pmap.sids] = pmap.array
             with hdf5.File(self.datastore.tempname, 'a') as t:
                 t['oqparam'] = oq
-                t['rlzs_by_grp'] = fake.get_rlzs_by_grp()
-                t['poes/grp-00'] = fix_ones(readinput.pmap)
+                t['poes/grp-00'][pmap.sids] = pmap.array
             self.realizations = fake.get_realizations()
             self.save_crmodel()
         elif oq.hazard_calculation_id:

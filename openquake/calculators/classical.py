@@ -366,11 +366,7 @@ class ClassicalCalculator(base.HazardCalculator):
         smap.monitor.save('srcfilter', self.src_filter())
         self.submit_tasks(smap)
         acc0 = self.acc0()  # create the rup/ datasets BEFORE swmr_on()
-        L = len(oq.imtls.array)
-        for grp_id, allrlzs in self.full_lt.get_rlzs_by_grp().items():
-            shape = (self.N, L, len(allrlzs))
-            self.datastore.create_dset('poes/' + grp_id,
-                                       F64, shape, compression='gzip')
+        base.create_poes_datasets(self.datastore, self.N, self.full_lt)
 
         self.datastore.swmr_on()
         smap.h5 = self.datastore.hdf5
@@ -521,10 +517,6 @@ class ClassicalCalculator(base.HazardCalculator):
         if nr:  # few sites, log the number of ruptures per magnitude
             logging.info('%s', nr)
         oq = self.oqparam
-        if oq.calculation_mode.endswith(('risk', 'damage', 'bcr')):
-            with hdf5.File(self.datastore.tempname, 'a') as cache:
-                cache['oqparam'] = oq
-                cache['rlzs_by_grp'] = self.full_lt.get_rlzs_by_grp()
         data = []
         weights = [rlz.weight for rlz in self.realizations]
         pgetter = getters.PmapGetter(
