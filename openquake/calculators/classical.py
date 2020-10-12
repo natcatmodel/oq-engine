@@ -521,6 +521,7 @@ class ClassicalCalculator(base.HazardCalculator):
         weights = [rlz.weight for rlz in self.realizations]
         pgetter = getters.PmapGetter(
             self.datastore, weights, self.sitecol.sids, oq.imtls)
+        logging.info('Saving probability maps')
         with self.monitor('saving probability maps'):
             for key, pmap in pmap_by_key.items():
                 if isinstance(key, str):  # disagg_by_src

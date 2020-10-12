@@ -119,20 +119,17 @@ class PmapGetter(object):
             self.dstore = hdf5.File(self.dstore, 'r')
         else:
             self.dstore.open('r')  # if not
-        if 'rlzs_by_grp' in self.dstore:
-            self.rlzs_by_grp = self.dstore['rlzs_by_grp']
-        else:
-            self.rlzs_by_grp = self.dstore['full_lt'].get_rlzs_by_grp()
+        self.rlzs_by_grp = self.dstore['rlzs_by_grp']
 
         # populate _pmap_by_grp
         self._pmap_by_grp = {}
         if 'poes' in self.dstore:
             # build probability maps restricted to the given sids
             for grp, dset in self.dstore['poes'].items():
-                array = dset[()]
+                array = dset[self.sids]
                 L, G = array.shape[1:]
                 pmap = probability_map.ProbabilityMap(L, G)
-                for sid, arr in enumerate(array):
+                for sid, arr in zip(self.sids, array):
                     if arr.sum():
                         pmap[sid] = probability_map.ProbabilityCurve(arr)
                 self._pmap_by_grp[grp] = pmap
