@@ -101,7 +101,7 @@ def get_stats(seq):
     return numpy.array(tup, stats_dt)
 
 
-def create_poes_datasets(dstore, N, full_lt):
+def create_poes(dstore, N, full_lt):
     oq = dstore['oqparam']
     L = len(oq.imtls.array)
     rlzs_by_grp = full_lt.get_rlzs_by_grp()
@@ -559,11 +559,11 @@ class HazardCalculator(BaseCalculator):
             fake = logictree.FullLogicTree.fake()
             self.datastore['full_lt'] = fake
             self.datastore['rlzs_by_grp'] = fake.get_rlzs_by_grp()
-            create_poes_datasets(self.datastore, self.N, fake)
-            self.datastore['poes/grp-00'][pmap.sids] = pmap.array
+            create_poes(self.datastore, self.N, fake)
+            self.datastore['poes/grp-00'][:] = pmap.to_array(self.N)
             with hdf5.File(self.datastore.tempname, 'a') as t:
                 t['oqparam'] = oq
-                t['poes/grp-00'][pmap.sids] = pmap.array
+                t['poes/grp-00'][:] = pmap.to_array(self.N)
             self.realizations = fake.get_realizations()
             self.save_crmodel()
         elif oq.hazard_calculation_id:

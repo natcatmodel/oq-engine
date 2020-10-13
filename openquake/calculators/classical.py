@@ -366,7 +366,7 @@ class ClassicalCalculator(base.HazardCalculator):
         smap.monitor.save('srcfilter', self.src_filter())
         self.submit_tasks(smap)
         acc0 = self.acc0()  # create the rup/ datasets BEFORE swmr_on()
-        base.create_poes_datasets(self.datastore, self.N, self.full_lt)
+        base.create_poes(self.datastore, self.N, self.full_lt)
 
         self.datastore.swmr_on()
         smap.h5 = self.datastore.hdf5
@@ -534,11 +534,11 @@ class ClassicalCalculator(base.HazardCalculator):
                     base.fix_ones(pmap)  # avoid saving PoEs == 1
                     trt = self.full_lt.trt_by_grp[key]
                     name = 'poes/grp-%02d' % key
-                    sids, array = pmap.sids, pmap.array
-                    self.datastore[name][sids] = array
+                    array = pmap.to_array(self.N)
+                    self.datastore[name][:] = array
                     if oq.calculation_mode.endswith(('risk', 'damage', 'bcr')):
                         with hdf5.File(self.datastore.tempname, 'a') as cache:
-                            cache[name][sids] = array
+                            cache[name][:] = array
                     extreme = max(
                         get_extreme_poe(pmap[sid].array, oq.imtls)
                         for sid in pmap)

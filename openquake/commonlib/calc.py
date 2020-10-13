@@ -217,7 +217,7 @@ def make_hmap(pmap, imtls, poes, sid=None):
     :returns: a ProbabilityMap with size (N, M, P)
     """
     if sid is None:
-        sids = pmap.sids
+        sids = U32(sorted(pmap))
     else:  # passed a probability curve
         pmap = {sid: pmap}
         sids = [sid]
