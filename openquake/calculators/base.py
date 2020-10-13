@@ -102,6 +102,10 @@ def get_stats(seq):
 
 
 def create_poes(dstore, N, full_lt):
+    """
+    Create rlzs_by_grp and poes/grp-XXX datasets in the datastore (and in
+    the temporary storage if there is no parent).
+    """
     oq = dstore['oqparam']
     L = len(oq.imtls.array)
     rlzs_by_grp = full_lt.get_rlzs_by_grp()
