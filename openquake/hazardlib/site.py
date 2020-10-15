@@ -378,9 +378,10 @@ class SiteCollection(object):
         :param hint: hint for how many tiles to generate
         """
         tiles = []
-        for seq in split_in_blocks(range(len(self)), hint or 1):
+        sids = self.sids
+        for i in range(int(hint)):
             sc = SiteCollection.__new__(SiteCollection)
-            sc.array = self.array[numpy.array(seq, int)]
+            sc.array = self.array[sids % hint == i]
             sc.complete = self
             tiles.append(sc)
         return tiles
